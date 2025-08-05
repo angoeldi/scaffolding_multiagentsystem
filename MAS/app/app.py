@@ -609,8 +609,18 @@ def handle_response(response):
     # --- Real-time logging of node and edge creations ---
     if response and isinstance(response, dict) and "elements" in response:
         elements = response["elements"]
-        current_nodes = {e["data"]["id"] for e in elements if "source" not in e.get("data", {})}
-        current_edges = {e["data"]["id"] for e in elements if "source" in e.get("data", {})}
+        # Elements may occasionally be strings rather than dictionaries.
+        # Only process dictionary elements to avoid attribute errors.
+        current_nodes = {
+            e["data"]["id"]
+            for e in elements
+            if isinstance(e, dict) and "source" not in e.get("data", {})
+        }
+        current_edges = {
+            e["data"]["id"]
+            for e in elements
+            if isinstance(e, dict) and "source" in e.get("data", {})
+        }
 
         prev_nodes = st.session_state.get("_prev_cm_nodes")
         prev_edges = st.session_state.get("_prev_cm_edges")
@@ -624,13 +634,21 @@ def handle_response(response):
             new_edges = current_edges - prev_edges
 
             for node_id in new_nodes:
-                node_data = next(e["data"] for e in elements if e["data"]["id"] == node_id)
+                node_data = next(
+                    e["data"]
+                    for e in elements
+                    if isinstance(e, dict) and e.get("data", {}).get("id") == node_id
+                )
                 print(
                     f"🆕 Node created: {node_data.get('label', '')} (id: {node_id}, x: {node_data.get('x')}, y: {node_data.get('y')})"
                 )
 
             for edge_id in new_edges:
-                edge_data = next(e["data"] for e in elements if e["data"]["id"] == edge_id)
+                edge_data = next(
+                    e["data"]
+                    for e in elements
+                    if isinstance(e, dict) and e.get("data", {}).get("id") == edge_id
+                )
                 print(
                     f"🆕 Edge created: {edge_data.get('source')} -> {edge_data.get('target')} "
                     f"(label: {edge_data.get('label', '')}, id: {edge_id})"
@@ -679,8 +697,16 @@ def handle_response(response):
             st.success(f"✅ Concept map data captured: {element_count} elements")
             
             # Show element breakdown
-            nodes = [e for e in response["elements"] if "source" not in e.get("data", {})]
-            edges = [e for e in response["elements"] if "source" in e.get("data", {})]
+            nodes = [
+                e
+                for e in response["elements"]
+                if isinstance(e, dict) and "source" not in e.get("data", {})
+            ]
+            edges = [
+                e
+                for e in response["elements"]
+                if isinstance(e, dict) and "source" in e.get("data", {})
+            ]
             st.write(f"**Elements breakdown:** {len(nodes)} nodes, {len(edges)} edges")
             
             # Show first few elements for verification
