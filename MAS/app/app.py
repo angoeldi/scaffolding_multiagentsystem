@@ -619,12 +619,24 @@ def handle_response(response):
     logger.debug(f"   Followup state: {st.session_state.followup}")
     logger.debug(f"   Submit request: {st.session_state.submit_request}")
 
+    roundn = st.session_state.roundn
+
     if response is not None:
         logger.debug(f"   Response content: {str(response)[:300]}")
         if isinstance(response, dict):
             logger.debug(f"   Has elements: {'elements' in response}")
             if "elements" in response:
                 logger.debug(f"   Elements count: {len(response['elements'])}")
+
+        # Always keep the latest concept map data to prevent loss on reruns
+        while len(st.session_state.cmdata) <= roundn:
+            if len(st.session_state.cmdata) > 0:
+                previous_map = copy.deepcopy(st.session_state.cmdata[-1])
+                st.session_state.cmdata.append(previous_map)
+            else:
+                st.session_state.cmdata.append(st.session_state.contents["initial_map"])
+        st.session_state.cmdata[roundn] = response
+        logger.debug(f"   📝 Auto-saved response in cmdata[{roundn}]")
 
     # --- Real-time logging of node and edge creations ---
     if response and isinstance(response, dict) and "elements" in response:
@@ -709,7 +721,7 @@ def handle_response(response):
     
     if st.session_state.submit_request and response and not st.session_state.followup:
         logger.info("   ✅ Processing response...")
-        
+
         # Debug: Log what we received
         if st.session_state.experimental_session and st.session_state.experimental_session.session_logger:
             st.session_state.experimental_session.session_logger.log_event(
@@ -721,25 +733,7 @@ def handle_response(response):
                     "has_action_history": "action_history" in response if isinstance(response, dict) else False
                 }
             )
-        
-        # Update the current round's concept map instead of appending
-        roundn = st.session_state.roundn
-        
-        # Ensure we have enough slots in cmdata
-        while len(st.session_state.cmdata) <= roundn:
-            # For rounds after 0, copy the previous round's data as starting point
-            if len(st.session_state.cmdata) > 0:
-                # Copy the previous round's concept map as the base for the new round
-                previous_map = copy.deepcopy(st.session_state.cmdata[-1])
-                st.session_state.cmdata.append(previous_map)
-            else:
-                # First round uses initial map
-                st.session_state.cmdata.append(st.session_state.contents["initial_map"])
-        
-        # Update the current round's concept map with the new data
-        st.session_state.cmdata[roundn] = response
-        logger.info(f"   📝 Stored response in cmdata[{roundn}]")
-        
+
         # Debug: Show what we're storing
         if isinstance(response, dict) and "elements" in response:
             dict_elements = [e for e in response["elements"] if isinstance(e, dict)]
@@ -758,11 +752,11 @@ def handle_response(response):
                     st.write(f"  {i+1}. {elem}")
         else:
             st.warning("⚠️ Response received but no elements found")
-        
+
         # Log the concept map update for debugging
         if st.session_state.experimental_session:
             st.session_state.experimental_session.update_concept_map_evolution(roundn, response)
-        
+
         st.session_state.submit_request = False
         st.session_state.followup = True
         st.rerun()
